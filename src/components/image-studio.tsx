@@ -1,7 +1,7 @@
 "use client"
 
 import Image from "next/image"
-import type { CSSProperties } from "react"
+import type { CSSProperties, DragEvent } from "react"
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import {
   ArrowDownToLineIcon,
@@ -65,14 +65,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import {
-  compactImagePayload,
-  extractGeneratedImages,
-  type GeneratedImage,
-  getImageApiError,
-  normalizeImageEndpoint,
-  readImageApiResponse,
-} from "@/lib/image-request"
+import { type GeneratedImage } from "@/lib/image-request"
 import {
   DEFAULT_LOCALE,
   LOCALE_COOKIE_KEY,
@@ -95,6 +88,7 @@ const MAX_UPLOADS = 4
 const MAX_FILE_SIZE = 10 * 1024 * 1024
 const ACCEPTED_TYPES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"])
 const DEFAULT_ENDPOINT = "https://api.openai.com/v1"
+const GITHUB_REPOSITORY_URL = "https://github.com/imgx-studio/gpt-image-2-webui"
 const CONNECTION_PREFERENCES_KEY = "imgx.connectionPreferences"
 const LEGACY_API_KEY_KEY = "imgx.apiKey"
 const LEGACY_REMEMBER_KEY_KEY = "imgx.rememberKey"
@@ -116,6 +110,23 @@ const PRESET_SIZE_VALUES = [
   "3840x2160",
   "2160x3840",
 ] as const
+
+function GitHubMarkIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      data-icon="inline-start"
+      fill="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        clipRule="evenodd"
+        d="M12 0.75C5.79 0.75 0.75 5.79 0.75 12c0 4.97 3.22 9.18 7.69 10.67 0.56 0.1 0.77-0.24 0.77-0.54 0-0.27-0.01-1.14-0.02-2.07-3.13 0.68-3.79-1.33-3.79-1.33-0.51-1.3-1.25-1.65-1.25-1.65-1.02-0.7 0.08-0.68 0.08-0.68 1.13 0.08 1.73 1.16 1.73 1.16 1 1.72 2.63 1.22 3.27 0.93 0.1-0.73 0.39-1.22 0.71-1.5-2.5-0.28-5.13-1.25-5.13-5.56 0-1.23 0.44-2.23 1.16-3.02-0.12-0.28-0.5-1.43 0.11-2.98 0 0 0.95-0.3 3.09 1.15 0.9-0.25 1.86-0.38 2.82-0.38s1.92 0.13 2.82 0.38c2.15-1.45 3.09-1.15 3.09-1.15 0.61 1.55 0.23 2.7 0.11 2.98 0.72 0.79 1.16 1.79 1.16 3.02 0 4.32-2.63 5.27-5.14 5.55 0.4 0.35 0.76 1.03 0.76 2.08 0 1.5-0.01 2.71-0.01 3.07 0 0.3 0.2 0.65 0.77 0.54A11.26 11.26 0 0 0 23.25 12C23.25 5.79 18.21 0.75 12 0.75Z"
+        fillRule="evenodd"
+      />
+    </svg>
+  )
+}
 
 type RemixRecipeId = "variations" | "retouch" | "upscale" | "inpaint"
 
@@ -157,506 +168,506 @@ type WorkflowCopy = {
 
 const workflowCopies: Record<Locale, WorkflowCopy> = {
   en: {
-    activeSource: "Active creation source",
-    clearSource: "Clear source",
-    continueGeneration: "Continue from source",
+    activeSource: "Active source image",
+    clearSource: "Clear source image",
+    continueGeneration: "Continue from source image",
     copyPrompt: "Copy prompt",
     copyPromptFailed: "Could not copy the prompt.",
     copyPromptSuccess: "Prompt copied.",
     currentPrompt: "Current prompt",
-    emptySelectionDescription: "Generate a set first, then pick one result to remix, upscale, retouch, or use as a new reference.",
+    emptySelectionDescription: "Generate a set first, then pick one result to remix, upscale, retouch, or use as the next source image.",
     emptySelectionTitle: "No image selected yet",
     flowSteps: ["Generate options", "Select a winner", "Choose a remix move", "Generate the next round"],
     generatedAsset: "Generated asset",
     generationSkeletonTitle: "Composing candidates",
     lineageTitle: "Prompt lineage",
     noRevisedPrompt: "No revised prompt returned by the model.",
-    panelDescription: "Select any result as the parent image, keep editing the prompt and parameters, then generate the next branch.",
+    panelDescription: "Select any result as the source image, keep editing the prompt and parameters, then generate the next branch.",
     panelTitle: "Iteration board",
-    recipeSuccess: "This result is now the active source with a remix instruction. Edit prompt/parameters, then generate again.",
+    recipeSuccess: "This result is now the active source image with a remix instruction. Edit prompt/parameters, then generate again.",
     recipesTitle: "Creative moves",
-    referenceSuccess: "This result is now the active source for the next generation.",
+    referenceSuccess: "This result is now the source image for the next generation.",
     revisedPrompt: "Model revised prompt",
     selectImage: "Select image",
     selected: "Selected",
     selectedAsset: "Selected asset",
-    setAsSource: "Set as source",
-    sourceReady: "Source ready",
+    setAsSource: "Set as source image",
+    sourceReady: "Source image ready",
     sourceRound: "Round {round}",
-    stageFailed: "Could not stage this image as a reference.",
-    stageWithRecipe: "Stage recipe",
+    stageFailed: "Could not set this image as the source image.",
+    stageWithRecipe: "Apply move",
     recipes: {
       variations: {
         title: "Explore variations",
         description: "Keep the product and composition, branch into four controlled alternatives.",
         instruction:
-          "Create controlled variations from the reference image. Preserve the main subject, product geometry, and premium lighting, while exploring subtle changes in angle, background, and styling.",
+          "Create controlled variations from the source image. Preserve the main subject, product geometry, and premium lighting, while exploring subtle changes in angle, background, and styling.",
       },
       retouch: {
         title: "Commercial polish",
         description: "Clean artifacts, sharpen material, and make it campaign-ready.",
         instruction:
-          "Retouch the reference image for commercial delivery. Remove artifacts, improve edges and material realism, balance reflections, and keep the original composition recognizable.",
+          "Retouch the source image for commercial delivery. Remove artifacts, improve edges and material realism, balance reflections, and keep the original composition recognizable.",
       },
       upscale: {
         title: "Hero upscale",
         description: "Turn the selected result into a cleaner hero visual.",
         instruction:
-          "Recreate the reference as a high-end hero image with sharper detail, cleaner surfaces, deeper contrast, and premium studio lighting. Do not change the core product identity.",
+          "Recreate the source image as a high-end hero image with sharper detail, cleaner surfaces, deeper contrast, and premium studio lighting. Do not change the core product identity.",
       },
       inpaint: {
         title: "Local redraw brief",
         description: "Use the image as context and request a targeted local change.",
         instruction:
-          "Use the reference image as context for a targeted redraw. Keep the untouched areas stable, then improve only the weak or inconsistent details with natural blending.",
+          "Use the source image as context for a targeted redraw. Keep the untouched areas stable, then improve only the weak or inconsistent details with natural blending.",
       },
     },
   },
   zh: {
-    activeSource: "当前创作源",
-    clearSource: "清除源图",
-    continueGeneration: "基于源图继续生成",
+    activeSource: "当前创作源图",
+    clearSource: "清除创作源图",
+    continueGeneration: "基于创作源图继续生成",
     copyPrompt: "复制提示词",
     copyPromptFailed: "无法复制提示词。",
     copyPromptSuccess: "提示词已复制。",
     currentPrompt: "当前提示词",
-    emptySelectionDescription: "先生成一组结果，再选择其中一张进行变体、精修、高清化或作为新的参考图继续创作。",
+    emptySelectionDescription: "先生成一组结果，再选择其中一张进行变体、精修、高清化或作为下一轮创作源图。",
     emptySelectionTitle: "还没有选中的图片",
     flowSteps: ["生成候选", "选中最佳图", "选择二创动作", "生成下一轮"],
     generatedAsset: "生成资产",
     generationSkeletonTitle: "正在组织候选图",
     lineageTitle: "提示词链路",
     noRevisedPrompt: "模型未返回改写后的提示词。",
-    panelDescription: "选择任意结果作为父图，继续修改提示词和参数，再生成下一条分支。",
+    panelDescription: "选择任意结果作为创作源图，继续修改提示词和参数，再生成下一条分支。",
     panelTitle: "迭代工作台",
-    recipeSuccess: "这张结果已成为当前创作源，并叠加了二创指令。继续调整 prompt/参数后再生成。",
+    recipeSuccess: "这张结果已设为当前创作源图，并叠加了二创指令。继续调整 prompt/参数后再生成。",
     recipesTitle: "二创动作",
-    referenceSuccess: "这张结果已成为下一轮的当前创作源。",
+    referenceSuccess: "这张结果已设为下一轮创作源图。",
     revisedPrompt: "模型改写提示词",
     selectImage: "选中图片",
     selected: "已选中",
     selectedAsset: "选中资产",
-    setAsSource: "设为源图",
-    sourceReady: "源图已就绪",
+    setAsSource: "设为创作源图",
+    sourceReady: "创作源图已就绪",
     sourceRound: "第 {round} 轮",
-    stageFailed: "无法将这张图片带入参考图。",
-    stageWithRecipe: "带入动作",
+    stageFailed: "无法将这张图片设为创作源图。",
+    stageWithRecipe: "应用动作",
     recipes: {
       variations: {
         title: "变体探索",
         description: "保留主体与构图，分叉出 4 张可控方案。",
         instruction:
-          "基于参考图做可控变体。保留主体、产品几何关系和高级布光，只微调角度、背景、陈列方式与风格氛围。",
+          "基于创作源图做可控变体。保留主体、产品几何关系和高级布光，只微调角度、背景、陈列方式与风格氛围。",
       },
       retouch: {
         title: "商业精修",
         description: "清理瑕疵、强化材质，让画面可交付。",
         instruction:
-          "对参考图进行商业级精修。移除伪影，优化边缘和材质真实感，平衡反光与阴影，同时保持原始构图可识别。",
+          "对创作源图进行商业级精修。移除伪影，优化边缘和材质真实感，平衡反光与阴影，同时保持原始构图可识别。",
       },
       upscale: {
         title: "高清主视觉",
         description: "把选中图升级成更干净的主视觉。",
         instruction:
-          "将参考图重塑为高端主视觉：细节更锐利，表面更干净，对比更深，使用高级影棚光效；不要改变核心产品身份。",
+          "将创作源图重塑为高端主视觉：细节更锐利，表面更干净，对比更深，使用高级影棚光效；不要改变核心产品身份。",
       },
       inpaint: {
         title: "局部重绘",
         description: "以原图为上下文，提出局部修改方向。",
         instruction:
-          "以参考图作为上下文进行局部重绘。保持不需要修改的区域稳定，只修复薄弱或不一致的细节，并保证自然融合。",
+          "以创作源图作为上下文进行局部重绘。保持不需要修改的区域稳定，只修复薄弱或不一致的细节，并保证自然融合。",
       },
     },
   },
   "zh-TW": {
-    activeSource: "目前創作源",
-    clearSource: "清除源圖",
-    continueGeneration: "基於源圖繼續生成",
+    activeSource: "目前創作源圖",
+    clearSource: "清除創作源圖",
+    continueGeneration: "基於創作源圖繼續生成",
     copyPrompt: "複製提示詞",
     copyPromptFailed: "無法複製提示詞。",
     copyPromptSuccess: "提示詞已複製。",
     currentPrompt: "目前提示詞",
-    emptySelectionDescription: "先生成一組結果，再選擇其中一張進行變體、精修、高清化，或作為新的參考圖繼續創作。",
+    emptySelectionDescription: "先生成一組結果，再選擇其中一張進行變體、精修、高清化，或作為下一輪創作源圖。",
     emptySelectionTitle: "尚未選取圖片",
     flowSteps: ["生成候選", "選中最佳圖", "選擇二創動作", "生成下一輪"],
     generatedAsset: "生成資產",
     generationSkeletonTitle: "正在組織候選圖",
     lineageTitle: "提示詞鏈路",
     noRevisedPrompt: "模型未返回改寫後的提示詞。",
-    panelDescription: "選擇任意結果作為父圖，繼續修改提示詞和參數，再生成下一條分支。",
+    panelDescription: "選擇任意結果作為創作源圖，繼續修改提示詞和參數，再生成下一條分支。",
     panelTitle: "迭代工作台",
-    recipeSuccess: "這張結果已成為目前創作源，並疊加了二創指令。繼續調整 prompt/參數後再生成。",
+    recipeSuccess: "這張結果已設為目前創作源圖，並疊加了二創指令。繼續調整 prompt/參數後再生成。",
     recipesTitle: "二創動作",
-    referenceSuccess: "這張結果已成為下一輪的目前創作源。",
+    referenceSuccess: "這張結果已設為下一輪創作源圖。",
     revisedPrompt: "模型改寫提示詞",
     selectImage: "選取圖片",
     selected: "已選取",
     selectedAsset: "選取資產",
-    setAsSource: "設為源圖",
-    sourceReady: "源圖已就緒",
+    setAsSource: "設為創作源圖",
+    sourceReady: "創作源圖已就緒",
     sourceRound: "第 {round} 輪",
-    stageFailed: "無法將這張圖片帶入參考圖。",
-    stageWithRecipe: "帶入動作",
+    stageFailed: "無法將這張圖片設為創作源圖。",
+    stageWithRecipe: "套用動作",
     recipes: {
       variations: {
         title: "變體探索",
         description: "保留主體與構圖，分叉出 4 張可控方案。",
         instruction:
-          "基於參考圖做可控變體。保留主體、產品幾何關係和高級布光，只微調角度、背景、陳列方式與風格氛圍。",
+          "基於創作源圖做可控變體。保留主體、產品幾何關係和高級布光，只微調角度、背景、陳列方式與風格氛圍。",
       },
       retouch: {
         title: "商業精修",
         description: "清理瑕疵、強化材質，讓畫面可交付。",
         instruction:
-          "對參考圖進行商業級精修。移除偽影，優化邊緣和材質真實感，平衡反光與陰影，同時保持原始構圖可識別。",
+          "對創作源圖進行商業級精修。移除偽影，優化邊緣和材質真實感，平衡反光與陰影，同時保持原始構圖可識別。",
       },
       upscale: {
         title: "高清主視覺",
         description: "把選中圖升級成更乾淨的主視覺。",
         instruction:
-          "將參考圖重塑為高端主視覺：細節更銳利，表面更乾淨，對比更深，使用高級影棚光效；不要改變核心產品身份。",
+          "將創作源圖重塑為高端主視覺：細節更銳利，表面更乾淨，對比更深，使用高級影棚光效；不要改變核心產品身份。",
       },
       inpaint: {
         title: "局部重繪",
         description: "以原圖為上下文，提出局部修改方向。",
         instruction:
-          "以參考圖作為上下文進行局部重繪。保持不需要修改的區域穩定，只修復薄弱或不一致的細節，並保證自然融合。",
+          "以創作源圖作為上下文進行局部重繪。保持不需要修改的區域穩定，只修復薄弱或不一致的細節，並保證自然融合。",
       },
     },
   },
   ja: {
-    activeSource: "現在の作成ソース",
-    clearSource: "ソースを解除",
-    continueGeneration: "ソースから続けて生成",
+    activeSource: "現在のソース画像",
+    clearSource: "ソース画像を解除",
+    continueGeneration: "ソース画像から続けて生成",
     copyPrompt: "プロンプトをコピー",
     copyPromptFailed: "プロンプトをコピーできませんでした。",
     copyPromptSuccess: "プロンプトをコピーしました。",
     currentPrompt: "現在のプロンプト",
-    emptySelectionDescription: "まず一組生成し、結果を選んでバリエーション、レタッチ、高解像度化、または新しい参照画像として続けます。",
+    emptySelectionDescription: "まず一組生成し、結果を選んでバリエーション、レタッチ、高解像度化、または次のソース画像として続けます。",
     emptySelectionTitle: "まだ画像が選択されていません",
     flowSteps: ["候補を生成", "ベストを選択", "リミックス操作を選択", "次のラウンドを生成"],
     generatedAsset: "生成アセット",
     generationSkeletonTitle: "候補を作成中",
     lineageTitle: "プロンプト履歴",
     noRevisedPrompt: "モデルから改訂プロンプトは返されませんでした。",
-    panelDescription: "任意の結果を親画像として選び、プロンプトとパラメータを編集して次の分岐を生成します。",
+    panelDescription: "任意の結果をソース画像として選び、プロンプトとパラメータを編集して次の分岐を生成します。",
     panelTitle: "反復ボード",
-    recipeSuccess: "この結果を現在の作成ソースにし、リミックス指示を追加しました。プロンプト/パラメータを調整して再生成してください。",
+    recipeSuccess: "この結果を現在のソース画像にし、リミックス指示を追加しました。プロンプト/パラメータを調整して再生成してください。",
     recipesTitle: "クリエイティブ操作",
-    referenceSuccess: "この結果を次の生成の作成ソースにしました。",
+    referenceSuccess: "この結果を次の生成のソース画像にしました。",
     revisedPrompt: "モデル改訂プロンプト",
     selectImage: "画像を選択",
     selected: "選択済み",
     selectedAsset: "選択アセット",
-    setAsSource: "ソースに設定",
-    sourceReady: "ソース準備完了",
+    setAsSource: "ソース画像に設定",
+    sourceReady: "ソース画像準備完了",
     sourceRound: "ラウンド {round}",
-    stageFailed: "この画像を参照画像に設定できませんでした。",
+    stageFailed: "この画像をソース画像に設定できませんでした。",
     stageWithRecipe: "操作を適用",
     recipes: {
       variations: {
         title: "バリエーション探索",
         description: "商品と構図を保ち、4つの制御された代替案に分岐します。",
         instruction:
-          "参照画像から制御されたバリエーションを作成します。主題、商品の形状、上質なライティングを維持しながら、角度、背景、スタイリングを控えめに変化させてください。",
+          "ソース画像から制御されたバリエーションを作成します。主題、商品の形状、上質なライティングを維持しながら、角度、背景、スタイリングを控えめに変化させてください。",
       },
       retouch: {
         title: "商用仕上げ",
         description: "アーティファクトを整え、素材感を強化して納品向けにします。",
         instruction:
-          "参照画像を商用納品向けにレタッチします。アーティファクトを除去し、エッジと素材のリアリティを高め、反射を整えつつ、元の構図が認識できる状態を保ってください。",
+          "ソース画像を商用納品向けにレタッチします。アーティファクトを除去し、エッジと素材のリアリティを高め、反射を整えつつ、元の構図が認識できる状態を保ってください。",
       },
       upscale: {
         title: "ヒーロー高解像度化",
         description: "選択結果をよりクリーンなヒーロービジュアルにします。",
         instruction:
-          "参照画像を高品質なヒーロー画像として再構成します。ディテールをよりシャープに、表面をよりクリーンに、コントラストを深くし、上質なスタジオライティングを加えてください。商品の核となる個性は変えないでください。",
+          "ソース画像を高品質なヒーロー画像として再構成します。ディテールをよりシャープに、表面をよりクリーンに、コントラストを深くし、上質なスタジオライティングを加えてください。商品の核となる個性は変えないでください。",
       },
       inpaint: {
         title: "局所修正ブリーフ",
         description: "画像を文脈として使い、狙った局所変更を依頼します。",
         instruction:
-          "参照画像を文脈として局所的な再描画を行います。変更しない領域は安定させ、弱い部分や不自然な細部だけを自然になじむよう改善してください。",
+          "ソース画像を文脈として局所的な再描画を行います。変更しない領域は安定させ、弱い部分や不自然な細部だけを自然になじむよう改善してください。",
       },
     },
   },
   ko: {
-    activeSource: "현재 생성 소스",
-    clearSource: "소스 지우기",
-    continueGeneration: "소스에서 이어서 생성",
+    activeSource: "현재 소스 이미지",
+    clearSource: "소스 이미지 지우기",
+    continueGeneration: "소스 이미지에서 이어서 생성",
     copyPrompt: "프롬프트 복사",
     copyPromptFailed: "프롬프트를 복사할 수 없습니다.",
     copyPromptSuccess: "프롬프트를 복사했습니다.",
     currentPrompt: "현재 프롬프트",
-    emptySelectionDescription: "먼저 결과 세트를 생성한 뒤, 하나를 선택해 변형, 리터치, 업스케일 또는 새 참조 이미지로 이어가세요.",
+    emptySelectionDescription: "먼저 결과 세트를 생성한 뒤, 하나를 선택해 변형, 리터치, 업스케일 또는 다음 소스 이미지로 이어가세요.",
     emptySelectionTitle: "아직 선택한 이미지가 없습니다",
     flowSteps: ["후보 생성", "최종안 선택", "리믹스 동작 선택", "다음 라운드 생성"],
     generatedAsset: "생성된 에셋",
     generationSkeletonTitle: "후보 구성 중",
     lineageTitle: "프롬프트 흐름",
     noRevisedPrompt: "모델이 수정된 프롬프트를 반환하지 않았습니다.",
-    panelDescription: "결과를 부모 이미지로 선택하고 프롬프트와 파라미터를 계속 편집한 뒤 다음 분기를 생성하세요.",
+    panelDescription: "결과를 소스 이미지로 선택하고 프롬프트와 파라미터를 계속 편집한 뒤 다음 분기를 생성하세요.",
     panelTitle: "반복 보드",
-    recipeSuccess: "이 결과가 현재 생성 소스가 되었고 리믹스 지시가 추가되었습니다. 프롬프트/파라미터를 조정한 뒤 다시 생성하세요.",
+    recipeSuccess: "이 결과가 현재 소스 이미지가 되었고 리믹스 지시가 추가되었습니다. 프롬프트/파라미터를 조정한 뒤 다시 생성하세요.",
     recipesTitle: "크리에이티브 동작",
-    referenceSuccess: "이 결과가 다음 생성의 현재 소스가 되었습니다.",
+    referenceSuccess: "이 결과가 다음 생성의 소스 이미지가 되었습니다.",
     revisedPrompt: "모델 수정 프롬프트",
     selectImage: "이미지 선택",
     selected: "선택됨",
     selectedAsset: "선택된 에셋",
-    setAsSource: "소스로 설정",
-    sourceReady: "소스 준비됨",
+    setAsSource: "소스 이미지로 설정",
+    sourceReady: "소스 이미지 준비됨",
     sourceRound: "{round}라운드",
-    stageFailed: "이 이미지를 참조 이미지로 설정할 수 없습니다.",
+    stageFailed: "이 이미지를 소스 이미지로 설정할 수 없습니다.",
     stageWithRecipe: "동작 적용",
     recipes: {
       variations: {
         title: "변형 탐색",
         description: "제품과 구도를 유지하고 4개의 제어된 대안을 만듭니다.",
         instruction:
-          "참조 이미지에서 제어된 변형을 만드세요. 주요 피사체, 제품 형태, 고급 조명은 유지하면서 각도, 배경, 스타일링만 섬세하게 탐색하세요.",
+          "소스 이미지에서 제어된 변형을 만드세요. 주요 피사체, 제품 형태, 고급 조명은 유지하면서 각도, 배경, 스타일링만 섬세하게 탐색하세요.",
       },
       retouch: {
         title: "상업용 보정",
         description: "아티팩트를 정리하고 소재감을 선명하게 해 캠페인에 맞춥니다.",
         instruction:
-          "참조 이미지를 상업 납품 수준으로 보정하세요. 아티팩트를 제거하고 경계와 소재 현실감을 개선하며 반사를 균형 있게 조정하되 원래 구도는 알아볼 수 있게 유지하세요.",
+          "소스 이미지를 상업 납품 수준으로 보정하세요. 아티팩트를 제거하고 경계와 소재 현실감을 개선하며 반사를 균형 있게 조정하되 원래 구도는 알아볼 수 있게 유지하세요.",
       },
       upscale: {
         title: "히어로 업스케일",
         description: "선택 결과를 더 깔끔한 히어로 비주얼로 만듭니다.",
         instruction:
-          "참조 이미지를 고급 히어로 이미지로 재구성하세요. 디테일을 더 선명하게, 표면을 더 깨끗하게, 대비를 더 깊게 만들고 프리미엄 스튜디오 조명을 적용하세요. 핵심 제품 정체성은 바꾸지 마세요.",
+          "소스 이미지를 고급 히어로 이미지로 재구성하세요. 디테일을 더 선명하게, 표면을 더 깨끗하게, 대비를 더 깊게 만들고 프리미엄 스튜디오 조명을 적용하세요. 핵심 제품 정체성은 바꾸지 마세요.",
       },
       inpaint: {
         title: "부분 수정 브리프",
         description: "이미지를 맥락으로 사용해 특정 부분 수정을 요청합니다.",
         instruction:
-          "참조 이미지를 맥락으로 특정 영역을 다시 그리세요. 수정하지 않는 영역은 안정적으로 유지하고 약하거나 일관되지 않은 디테일만 자연스럽게 개선하세요.",
+          "소스 이미지를 맥락으로 특정 영역을 다시 그리세요. 수정하지 않는 영역은 안정적으로 유지하고 약하거나 일관되지 않은 디테일만 자연스럽게 개선하세요.",
       },
     },
   },
   es: {
-    activeSource: "Fuente creativa activa",
-    clearSource: "Borrar fuente",
-    continueGeneration: "Continuar desde la fuente",
+    activeSource: "Imagen fuente activa",
+    clearSource: "Borrar imagen fuente",
+    continueGeneration: "Continuar desde la imagen fuente",
     copyPrompt: "Copiar prompt",
     copyPromptFailed: "No se pudo copiar el prompt.",
     copyPromptSuccess: "Prompt copiado.",
     currentPrompt: "Prompt actual",
-    emptySelectionDescription: "Genera primero un conjunto y elige un resultado para remezclar, mejorar, retocar o usar como nueva referencia.",
+    emptySelectionDescription: "Genera primero un conjunto y elige un resultado para remezclar, mejorar, retocar o usar como la siguiente imagen fuente.",
     emptySelectionTitle: "Aún no hay imagen seleccionada",
     flowSteps: ["Generar opciones", "Elegir ganadora", "Elegir remezcla", "Generar la siguiente ronda"],
     generatedAsset: "Asset generado",
     generationSkeletonTitle: "Componiendo candidatos",
     lineageTitle: "Linaje del prompt",
     noRevisedPrompt: "El modelo no devolvió un prompt revisado.",
-    panelDescription: "Selecciona cualquier resultado como imagen padre, sigue editando el prompt y los parámetros, y genera la siguiente rama.",
+    panelDescription: "Selecciona cualquier resultado como imagen fuente, sigue editando el prompt y los parámetros, y genera la siguiente rama.",
     panelTitle: "Panel de iteración",
-    recipeSuccess: "Este resultado es ahora la fuente activa con una instrucción de remezcla. Edita prompt/parámetros y vuelve a generar.",
+    recipeSuccess: "Este resultado es ahora la imagen fuente activa con una instrucción de remezcla. Edita prompt/parámetros y vuelve a generar.",
     recipesTitle: "Movimientos creativos",
-    referenceSuccess: "Este resultado es ahora la fuente activa para la siguiente generación.",
+    referenceSuccess: "Este resultado es ahora la imagen fuente para la siguiente generación.",
     revisedPrompt: "Prompt revisado por el modelo",
     selectImage: "Seleccionar imagen",
     selected: "Seleccionada",
     selectedAsset: "Asset seleccionado",
-    setAsSource: "Usar como fuente",
-    sourceReady: "Fuente lista",
+    setAsSource: "Usar como imagen fuente",
+    sourceReady: "Imagen fuente lista",
     sourceRound: "Ronda {round}",
-    stageFailed: "No se pudo preparar esta imagen como referencia.",
+    stageFailed: "No se pudo usar esta imagen como imagen fuente.",
     stageWithRecipe: "Aplicar movimiento",
     recipes: {
       variations: {
         title: "Explorar variaciones",
         description: "Mantén producto y composición, y abre cuatro alternativas controladas.",
         instruction:
-          "Crea variaciones controladas desde la imagen de referencia. Conserva el sujeto principal, la geometría del producto y la iluminación premium, explorando cambios sutiles de ángulo, fondo y estilo.",
+          "Crea variaciones controladas desde la imagen fuente. Conserva el sujeto principal, la geometría del producto y la iluminación premium, explorando cambios sutiles de ángulo, fondo y estilo.",
       },
       retouch: {
         title: "Pulido comercial",
         description: "Limpia artefactos, afina materiales y deja la imagen lista para campaña.",
         instruction:
-          "Retoca la imagen de referencia para entrega comercial. Elimina artefactos, mejora bordes y realismo de materiales, equilibra reflejos y mantén reconocible la composición original.",
+          "Retoca la imagen fuente para entrega comercial. Elimina artefactos, mejora bordes y realismo de materiales, equilibra reflejos y mantén reconocible la composición original.",
       },
       upscale: {
         title: "Hero upscale",
         description: "Convierte el resultado elegido en un hero visual más limpio.",
         instruction:
-          "Recrea la referencia como una imagen hero de alta gama con más detalle, superficies limpias, contraste profundo e iluminación de estudio premium. No cambies la identidad central del producto.",
+          "Recrea la imagen fuente como una imagen hero de alta gama con más detalle, superficies limpias, contraste profundo e iluminación de estudio premium. No cambies la identidad central del producto.",
       },
       inpaint: {
         title: "Brief de redibujo local",
         description: "Usa la imagen como contexto y pide un cambio local específico.",
         instruction:
-          "Usa la imagen de referencia como contexto para un redibujo localizado. Mantén estables las zonas no modificadas y mejora solo los detalles débiles o inconsistentes con una integración natural.",
+          "Usa la imagen fuente como contexto para un redibujo localizado. Mantén estables las zonas no modificadas y mejora solo los detalles débiles o inconsistentes con una integración natural.",
       },
     },
   },
   fr: {
-    activeSource: "Source créative active",
-    clearSource: "Effacer la source",
-    continueGeneration: "Continuer depuis la source",
+    activeSource: "Image source active",
+    clearSource: "Effacer l’image source",
+    continueGeneration: "Continuer depuis l’image source",
     copyPrompt: "Copier le prompt",
     copyPromptFailed: "Impossible de copier le prompt.",
     copyPromptSuccess: "Prompt copié.",
     currentPrompt: "Prompt actuel",
-    emptySelectionDescription: "Générez d'abord une série, puis choisissez un résultat à remixer, retoucher, améliorer ou utiliser comme nouvelle référence.",
+    emptySelectionDescription: "Générez d'abord une série, puis choisissez un résultat à remixer, retoucher, améliorer ou utiliser comme prochaine image source.",
     emptySelectionTitle: "Aucune image sélectionnée",
     flowSteps: ["Générer des options", "Choisir la meilleure", "Choisir un remix", "Générer la suite"],
     generatedAsset: "Asset généré",
     generationSkeletonTitle: "Composition des candidats",
     lineageTitle: "Historique du prompt",
     noRevisedPrompt: "Le modèle n'a pas renvoyé de prompt révisé.",
-    panelDescription: "Sélectionnez un résultat comme image parente, ajustez le prompt et les paramètres, puis générez la branche suivante.",
+    panelDescription: "Sélectionnez un résultat comme image source, ajustez le prompt et les paramètres, puis générez la branche suivante.",
     panelTitle: "Tableau d'itération",
-    recipeSuccess: "Ce résultat est maintenant la source active avec une instruction de remix. Modifiez prompt/paramètres, puis relancez la génération.",
+    recipeSuccess: "Ce résultat est maintenant l’image source active avec une instruction de remix. Modifiez prompt/paramètres, puis relancez la génération.",
     recipesTitle: "Mouvements créatifs",
-    referenceSuccess: "Ce résultat est maintenant la source active pour la prochaine génération.",
+    referenceSuccess: "Ce résultat est maintenant l’image source pour la prochaine génération.",
     revisedPrompt: "Prompt révisé par le modèle",
     selectImage: "Sélectionner l'image",
     selected: "Sélectionné",
     selectedAsset: "Asset sélectionné",
-    setAsSource: "Définir comme source",
-    sourceReady: "Source prête",
+    setAsSource: "Définir comme image source",
+    sourceReady: "Image source prête",
     sourceRound: "Tour {round}",
-    stageFailed: "Impossible de préparer cette image comme référence.",
+    stageFailed: "Impossible de définir cette image comme image source.",
     stageWithRecipe: "Appliquer le remix",
     recipes: {
       variations: {
         title: "Explorer des variations",
         description: "Gardez produit et composition, puis créez quatre alternatives contrôlées.",
         instruction:
-          "Créez des variations contrôlées à partir de l'image de référence. Préservez le sujet principal, la géométrie du produit et l'éclairage premium, tout en explorant de légers changements d'angle, de fond et de style.",
+          "Créez des variations contrôlées à partir de l’image source. Préservez le sujet principal, la géométrie du produit et l'éclairage premium, tout en explorant de légers changements d'angle, de fond et de style.",
       },
       retouch: {
         title: "Finition commerciale",
         description: "Nettoyez les artefacts, affinez les matières et préparez l'image pour campagne.",
         instruction:
-          "Retouchez l'image de référence pour une livraison commerciale. Supprimez les artefacts, améliorez les bords et le réalisme des matières, équilibrez les reflets et gardez la composition originale reconnaissable.",
+          "Retouchez l’image source pour une livraison commerciale. Supprimez les artefacts, améliorez les bords et le réalisme des matières, équilibrez les reflets et gardez la composition originale reconnaissable.",
       },
       upscale: {
         title: "Hero upscale",
         description: "Transformez le résultat choisi en visuel hero plus propre.",
         instruction:
-          "Recréez la référence comme un visuel hero haut de gamme avec plus de détail, des surfaces plus propres, un contraste plus profond et un éclairage studio premium. Ne changez pas l'identité centrale du produit.",
+          "Recréez l’image source comme un visuel hero haut de gamme avec plus de détail, des surfaces plus propres, un contraste plus profond et un éclairage studio premium. Ne changez pas l'identité centrale du produit.",
       },
       inpaint: {
         title: "Brief de retouche locale",
         description: "Utilisez l'image comme contexte et demandez un changement local ciblé.",
         instruction:
-          "Utilisez l'image de référence comme contexte pour une retouche localisée. Gardez les zones intactes stables, puis améliorez seulement les détails faibles ou incohérents avec une intégration naturelle.",
+          "Utilisez l’image source comme contexte pour une retouche localisée. Gardez les zones intactes stables, puis améliorez seulement les détails faibles ou incohérents avec une intégration naturelle.",
       },
     },
   },
   de: {
-    activeSource: "Aktive Kreativquelle",
-    clearSource: "Quelle entfernen",
-    continueGeneration: "Von Quelle fortsetzen",
+    activeSource: "Aktives Quellbild",
+    clearSource: "Quellbild entfernen",
+    continueGeneration: "Vom Quellbild fortsetzen",
     copyPrompt: "Prompt kopieren",
     copyPromptFailed: "Prompt konnte nicht kopiert werden.",
     copyPromptSuccess: "Prompt kopiert.",
     currentPrompt: "Aktueller Prompt",
-    emptySelectionDescription: "Erzeuge zuerst ein Set und wähle dann ein Ergebnis zum Remixen, Retuschieren, Hochskalieren oder als neue Referenz.",
+    emptySelectionDescription: "Erzeuge zuerst ein Set und wähle dann ein Ergebnis zum Remixen, Retuschieren, Hochskalieren oder als nächstes Quellbild.",
     emptySelectionTitle: "Noch kein Bild ausgewählt",
     flowSteps: ["Optionen erzeugen", "Favorit wählen", "Remix wählen", "Nächste Runde erzeugen"],
     generatedAsset: "Generiertes Asset",
     generationSkeletonTitle: "Kandidaten werden erstellt",
     lineageTitle: "Prompt-Verlauf",
     noRevisedPrompt: "Das Modell hat keinen überarbeiteten Prompt zurückgegeben.",
-    panelDescription: "Wähle ein Ergebnis als Ausgangsbild, bearbeite Prompt und Parameter weiter und erzeuge den nächsten Zweig.",
+    panelDescription: "Wähle ein Ergebnis als Quellbild, bearbeite Prompt und Parameter weiter und erzeuge den nächsten Zweig.",
     panelTitle: "Iterationsboard",
-    recipeSuccess: "Dieses Ergebnis ist jetzt die aktive Quelle mit Remix-Anweisung. Prompt/Parameter anpassen und erneut generieren.",
+    recipeSuccess: "Dieses Ergebnis ist jetzt das aktive Quellbild mit Remix-Anweisung. Prompt/Parameter anpassen und erneut generieren.",
     recipesTitle: "Kreative Aktionen",
-    referenceSuccess: "Dieses Ergebnis ist jetzt die aktive Quelle für die nächste Generierung.",
+    referenceSuccess: "Dieses Ergebnis ist jetzt das Quellbild für die nächste Generierung.",
     revisedPrompt: "Vom Modell überarbeiteter Prompt",
     selectImage: "Bild auswählen",
     selected: "Ausgewählt",
     selectedAsset: "Ausgewähltes Asset",
-    setAsSource: "Als Quelle setzen",
-    sourceReady: "Quelle bereit",
+    setAsSource: "Als Quellbild setzen",
+    sourceReady: "Quellbild bereit",
     sourceRound: "Runde {round}",
-    stageFailed: "Dieses Bild konnte nicht als Referenz vorbereitet werden.",
+    stageFailed: "Dieses Bild konnte nicht als Quellbild gesetzt werden.",
     stageWithRecipe: "Aktion anwenden",
     recipes: {
       variations: {
         title: "Variationen erkunden",
         description: "Produkt und Komposition beibehalten und vier kontrollierte Alternativen erzeugen.",
         instruction:
-          "Erstelle kontrollierte Variationen aus dem Referenzbild. Bewahre Hauptmotiv, Produktgeometrie und hochwertige Lichtsetzung, während Winkel, Hintergrund und Styling subtil variiert werden.",
+          "Erstelle kontrollierte Variationen aus dem Quellbild. Bewahre Hauptmotiv, Produktgeometrie und hochwertige Lichtsetzung, während Winkel, Hintergrund und Styling subtil variiert werden.",
       },
       retouch: {
         title: "Kommerzieller Feinschliff",
         description: "Artefakte bereinigen, Material schärfen und kampagnenreif machen.",
         instruction:
-          "Retuschiere das Referenzbild für die kommerzielle Auslieferung. Entferne Artefakte, verbessere Kanten und Materialrealismus, balanciere Reflexionen und halte die ursprüngliche Komposition erkennbar.",
+          "Retuschiere das Quellbild für die kommerzielle Auslieferung. Entferne Artefakte, verbessere Kanten und Materialrealismus, balanciere Reflexionen und halte die ursprüngliche Komposition erkennbar.",
       },
       upscale: {
         title: "Hero-Upscale",
         description: "Das gewählte Ergebnis in ein saubereres Hero-Visual verwandeln.",
         instruction:
-          "Erstelle die Referenz als hochwertiges Hero-Bild neu: schärfere Details, sauberere Oberflächen, tieferer Kontrast und Premium-Studiolicht. Die zentrale Produktidentität darf nicht verändert werden.",
+          "Erstelle das Quellbild als hochwertiges Hero-Bild neu: schärfere Details, sauberere Oberflächen, tieferer Kontrast und Premium-Studiolicht. Die zentrale Produktidentität darf nicht verändert werden.",
       },
       inpaint: {
         title: "Brief für lokale Korrektur",
         description: "Das Bild als Kontext nutzen und eine gezielte lokale Änderung anfordern.",
         instruction:
-          "Nutze das Referenzbild als Kontext für eine gezielte lokale Neuzeichnung. Unveränderte Bereiche stabil halten und nur schwache oder inkonsistente Details natürlich verbessern.",
+          "Nutze das Quellbild als Kontext für eine gezielte lokale Neuzeichnung. Unveränderte Bereiche stabil halten und nur schwache oder inkonsistente Details natürlich verbessern.",
       },
     },
   },
   pt: {
-    activeSource: "Fonte criativa ativa",
-    clearSource: "Limpar fonte",
-    continueGeneration: "Continuar da fonte",
+    activeSource: "Imagem fonte ativa",
+    clearSource: "Limpar imagem fonte",
+    continueGeneration: "Continuar da imagem fonte",
     copyPrompt: "Copiar prompt",
     copyPromptFailed: "Não foi possível copiar o prompt.",
     copyPromptSuccess: "Prompt copiado.",
     currentPrompt: "Prompt atual",
-    emptySelectionDescription: "Gere primeiro um conjunto e escolha um resultado para remixar, retocar, ampliar ou usar como nova referência.",
+    emptySelectionDescription: "Gere primeiro um conjunto e escolha um resultado para remixar, retocar, ampliar ou usar como a próxima imagem fonte.",
     emptySelectionTitle: "Nenhuma imagem selecionada ainda",
     flowSteps: ["Gerar opções", "Escolher a melhor", "Escolher remix", "Gerar a próxima rodada"],
     generatedAsset: "Asset gerado",
     generationSkeletonTitle: "Compondo candidatos",
     lineageTitle: "Histórico do prompt",
     noRevisedPrompt: "O modelo não retornou um prompt revisado.",
-    panelDescription: "Selecione qualquer resultado como imagem principal, continue editando o prompt e os parâmetros, e gere o próximo ramo.",
+    panelDescription: "Selecione qualquer resultado como imagem fonte, continue editando o prompt e os parâmetros, e gere o próximo ramo.",
     panelTitle: "Quadro de iteração",
-    recipeSuccess: "Este resultado agora é a fonte ativa com uma instrução de remix. Edite prompt/parâmetros e gere novamente.",
+    recipeSuccess: "Este resultado agora é a imagem fonte ativa com uma instrução de remix. Edite prompt/parâmetros e gere novamente.",
     recipesTitle: "Movimentos criativos",
-    referenceSuccess: "Este resultado agora é a fonte ativa para a próxima geração.",
+    referenceSuccess: "Este resultado agora é a imagem fonte para a próxima geração.",
     revisedPrompt: "Prompt revisado pelo modelo",
     selectImage: "Selecionar imagem",
     selected: "Selecionada",
     selectedAsset: "Asset selecionado",
-    setAsSource: "Definir como fonte",
-    sourceReady: "Fonte pronta",
+    setAsSource: "Definir como imagem fonte",
+    sourceReady: "Imagem fonte pronta",
     sourceRound: "Rodada {round}",
-    stageFailed: "Não foi possível preparar esta imagem como referência.",
+    stageFailed: "Não foi possível definir esta imagem como imagem fonte.",
     stageWithRecipe: "Aplicar movimento",
     recipes: {
       variations: {
         title: "Explorar variações",
         description: "Mantenha produto e composição, criando quatro alternativas controladas.",
         instruction:
-          "Crie variações controladas a partir da imagem de referência. Preserve o assunto principal, a geometria do produto e a iluminação premium, explorando mudanças sutis de ângulo, fundo e estilo.",
+          "Crie variações controladas a partir da imagem fonte. Preserve o assunto principal, a geometria do produto e a iluminação premium, explorando mudanças sutis de ângulo, fundo e estilo.",
       },
       retouch: {
         title: "Polimento comercial",
         description: "Limpe artefatos, refine materiais e deixe pronto para campanha.",
         instruction:
-          "Retoque a imagem de referência para entrega comercial. Remova artefatos, melhore bordas e realismo dos materiais, equilibre reflexos e mantenha a composição original reconhecível.",
+          "Retoque a imagem fonte para entrega comercial. Remova artefatos, melhore bordas e realismo dos materiais, equilibre reflexos e mantenha a composição original reconhecível.",
       },
       upscale: {
         title: "Hero upscale",
         description: "Transforme o resultado selecionado em um hero visual mais limpo.",
         instruction:
-          "Recrie a referência como uma imagem hero de alto nível com mais detalhe, superfícies mais limpas, contraste profundo e iluminação de estúdio premium. Não altere a identidade central do produto.",
+          "Recrie a imagem fonte como uma imagem hero de alto nível com mais detalhe, superfícies mais limpas, contraste profundo e iluminação de estúdio premium. Não altere a identidade central do produto.",
       },
       inpaint: {
         title: "Brief de redesenho local",
         description: "Use a imagem como contexto e solicite uma mudança local direcionada.",
         instruction:
-          "Use a imagem de referência como contexto para um redesenho localizado. Mantenha estáveis as áreas intactas e melhore apenas detalhes fracos ou inconsistentes com integração natural.",
+          "Use a imagem fonte como contexto para um redesenho localizado. Mantenha estáveis as áreas intactas e melhore apenas detalhes fracos ou inconsistentes com integração natural.",
       },
     },
   },
@@ -679,10 +690,13 @@ const modelItems = [
   { label: "gpt-image-1", value: "gpt-image-1" },
 ]
 
-type RequestMode = "direct" | "proxy"
 type PresetSizeValue = (typeof PRESET_SIZE_VALUES)[number]
 type SizeValue = PresetSizeValue | (string & {})
 type SizeSelectValue = PresetSizeValue | typeof CUSTOM_SIZE_OPTION_VALUE
+
+function getGenerationErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback
+}
 
 type StudioResponse = {
   endpoint: string
@@ -693,7 +707,6 @@ type StudioResponse = {
   prompt: string
   quality: string
   requestedCount: number
-  requestMode: RequestMode
   size: string
   sourceLabel?: string
 }
@@ -1024,6 +1037,7 @@ export function ImageStudio({ initialLocale = DEFAULT_LOCALE }: { initialLocale?
   const activeSourceRef = useRef<ActiveSource | null>(null)
   const uploadsRef = useRef<UploadPreview[]>([])
   const progressResetTimeoutRef = useRef<number | null>(null)
+  const referenceDropDepthRef = useRef(0)
   const browserLocale = useSyncExternalStore(
     subscribeToLocalePreferenceChange,
     getPreferredClientLocale,
@@ -1039,13 +1053,13 @@ export function ImageStudio({ initialLocale = DEFAULT_LOCALE }: { initialLocale?
   const [endpoint, setEndpoint] = useState(DEFAULT_ENDPOINT)
   const [model, setModel] = useState("gpt-image-2")
   const [uploads, setUploads] = useState<UploadPreview[]>([])
+  const [isReferenceDropActive, setIsReferenceDropActive] = useState(false)
   const [sizeMode, setSizeMode] = useState<SizeSelectValue>(DEFAULT_SIZE)
   const [customSize, setCustomSize] = useState(DEFAULT_CUSTOM_SIZE)
   const [quality, setQuality] = useState("auto")
   const [outputFormat, setOutputFormat] = useState("png")
   const [background, setBackground] = useState("auto")
   const [imageCount, setImageCount] = useState(1)
-  const [requestMode, setRequestMode] = useState<RequestMode>("direct")
   const [isGenerating, setIsGenerating] = useState(false)
   const [progress, setProgress] = useState(0)
   const [result, setResult] = useState<StudioResponse | null>(null)
@@ -1192,6 +1206,61 @@ export function ImageStudio({ initialLocale = DEFAULT_LOCALE }: { initialLocale?
     })
   }, [locale])
 
+  const handleReferenceDragEnter = useCallback((event: DragEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+
+    if (!Array.from(event.dataTransfer.types).includes("Files")) {
+      return
+    }
+
+    referenceDropDepthRef.current += 1
+    event.dataTransfer.dropEffect = "copy"
+    setIsReferenceDropActive(true)
+  }, [])
+
+  const handleReferenceDragOver = useCallback((event: DragEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+
+    if (Array.from(event.dataTransfer.types).includes("Files")) {
+      event.dataTransfer.dropEffect = "copy"
+    }
+  }, [])
+
+  const handleReferenceDragLeave = useCallback((event: DragEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+
+    referenceDropDepthRef.current = Math.max(referenceDropDepthRef.current - 1, 0)
+
+    if (referenceDropDepthRef.current === 0) {
+      setIsReferenceDropActive(false)
+    }
+  }, [])
+
+  const handleReferenceDrop = useCallback((event: DragEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+
+    referenceDropDepthRef.current = 0
+    setIsReferenceDropActive(false)
+
+    if (event.dataTransfer.files.length > 0) {
+      addUploads(event.dataTransfer.files)
+      return
+    }
+
+    const droppedFiles = Array.from(event.dataTransfer.items)
+      .filter((item) => item.kind === "file")
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => file !== null)
+
+    if (droppedFiles.length > 0) {
+      addUploads(droppedFiles)
+    }
+  }, [addUploads])
+
   const removeUpload = useCallback((id: string) => {
     setUploads((current) => {
       const removed = current.find((upload) => upload.id === id)
@@ -1269,71 +1338,6 @@ export function ImageStudio({ initialLocale = DEFAULT_LOCALE }: { initialLocale?
     }
   }
 
-  async function callDirect(requestedCount: number): Promise<{ endpoint: string; images: GeneratedImage[] }> {
-    const requestEndpoint = normalizeImageEndpoint(endpoint.trim(), inputUploadCount > 0, locale)
-    const headers = {
-      Accept: "application/json",
-      Authorization: `Bearer ${apiKey.trim()}`,
-    }
-
-    const response = inputUploadCount
-      ? await fetch(requestEndpoint, {
-          method: "POST",
-          headers,
-          body: (() => {
-            const body = new FormData()
-
-            body.append("model", model)
-            body.append("prompt", prompt.trim())
-            body.append("size", size)
-            body.append("quality", quality)
-            body.append("background", background)
-            body.append("output_format", outputFormat)
-            body.append("response_format", "b64_json")
-            body.append("n", String(requestedCount))
-
-            for (const upload of inputUploads) {
-              body.append("image", upload.file, upload.file.name)
-            }
-
-            return body
-          })(),
-        })
-      : await fetch(requestEndpoint, {
-          method: "POST",
-          headers: {
-            ...headers,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(
-            compactImagePayload({
-              background,
-              model,
-              n: requestedCount,
-              output_format: outputFormat,
-              prompt: prompt.trim(),
-              quality,
-              response_format: "b64_json",
-              size,
-            })
-          ),
-        })
-
-    const payload = await readImageApiResponse(response, locale)
-
-    if (!response.ok) {
-      throw new Error(getImageApiError(payload) || t(locale, "requestFailedStatus", { status: response.status }))
-    }
-
-    const images = extractGeneratedImages(payload, outputFormat)
-
-    if (!images.length) {
-      throw new Error(t(locale, "noImageInPayload"))
-    }
-
-    return { endpoint: requestEndpoint, images }
-  }
-
   async function callProxy(requestedCount: number): Promise<{ endpoint: string; images: GeneratedImage[] }> {
     const formData = new FormData()
     formData.append("apiKey", apiKey.trim())
@@ -1375,10 +1379,6 @@ export function ImageStudio({ initialLocale = DEFAULT_LOCALE }: { initialLocale?
     }
   }
 
-  async function requestImages(requestedCount: number) {
-    return requestMode === "direct" ? callDirect(requestedCount) : callProxy(requestedCount)
-  }
-
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
@@ -1389,11 +1389,6 @@ export function ImageStudio({ initialLocale = DEFAULT_LOCALE }: { initialLocale?
 
     if (!prompt.trim()) {
       toast.error(text.promptRequired)
-      return
-    }
-
-    if (requestMode === "direct" && !apiKey.trim()) {
-      toast.error(text.directApiKeyRequired)
       return
     }
 
@@ -1419,7 +1414,7 @@ export function ImageStudio({ initialLocale = DEFAULT_LOCALE }: { initialLocale?
         attempts += 1
 
         try {
-          const topUp = await requestImages(1)
+          const topUp = await callProxy(1)
           collectedEndpoint = topUp.endpoint
           images.push(...topUp.images.slice(0, total - images.length))
         } catch (error) {
@@ -1448,7 +1443,6 @@ export function ImageStudio({ initialLocale = DEFAULT_LOCALE }: { initialLocale?
         prompt: prompt.trim(),
         quality,
         requestedCount: total,
-        requestMode,
         size,
         sourceLabel: activeSource?.label,
       })
@@ -1460,7 +1454,7 @@ export function ImageStudio({ initialLocale = DEFAULT_LOCALE }: { initialLocale?
           t(locale, "generatedPartialWarning", {
             count: visibleImages.length,
             total,
-            error: firstError instanceof Error ? firstError.message : String(firstError),
+            error: getGenerationErrorMessage(firstError, String(firstError)),
           })
         )
       } else {
@@ -1477,7 +1471,7 @@ export function ImageStudio({ initialLocale = DEFAULT_LOCALE }: { initialLocale?
         progressResetTimeoutRef.current = null
       }, 900)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : text.generationFailed)
+      toast.error(getGenerationErrorMessage(error, text.generationFailed))
       setProgress(0)
     } finally {
       setIsGenerating(false)
@@ -1491,29 +1485,21 @@ export function ImageStudio({ initialLocale = DEFAULT_LOCALE }: { initialLocale?
       className={cn("notranslate studio-shell flex min-h-screen flex-col text-foreground", isCjk && "studio-cjk")}
     >
       <header className="studio-header-surface sticky top-0 z-30 border-b backdrop-blur-xl">
-        <div className="mx-auto flex w-full max-w-[1840px] items-center justify-between gap-5 px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-3">
+        <div className="mx-auto flex w-full max-w-[1840px] items-center justify-between gap-3 px-4 py-3 sm:gap-5 sm:px-6">
+          <div className="flex items-center">
             <div className="studio-logo-mark shrink-0">
               <Image
                 priority
-                alt="ImgX"
+                alt="ImgX Studio"
                 className="studio-logo-image"
-                height={40}
+                height={123}
                 src="/logo.png"
-                width={40}
+                style={{ width: "100%", height: "auto" }}
+                width={426}
               />
             </div>
-            <div className="leading-tight">
-              <div className="flex items-baseline gap-2">
-                <span className="text-base font-semibold tracking-tight text-foreground">ImgX Studio</span>
-                <Badge variant="secondary" className="h-5 rounded-md px-2 font-mono text-[10px] font-medium tracking-[0.12em]">
-                  gpt-image-2
-                </Badge>
-              </div>
-              <p className="text-xs text-muted-foreground">{text.brandSubtitle}</p>
-            </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <div className="hidden items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 font-mono text-[11px] text-muted-foreground shadow-sm md:flex">
               <span className="font-medium text-foreground">{model}</span>
               <span className="text-border">·</span>
@@ -1540,10 +1526,10 @@ export function ImageStudio({ initialLocale = DEFAULT_LOCALE }: { initialLocale?
             >
               <SelectTrigger
                 aria-label={text.localeSwitchAria}
-                className="h-10 w-[154px] rounded-md bg-muted/40 px-3 text-xs font-semibold shadow-sm"
+                className="h-10 w-14 rounded-md bg-muted/40 px-2 text-xs font-semibold shadow-sm sm:w-[154px] sm:px-3"
               >
                 <LanguagesIcon data-icon="inline-start" />
-                <SelectValue placeholder={text.localeLabel}>
+                <SelectValue className="hidden sm:flex" placeholder={text.localeLabel}>
                   {selectedLocale.nativeLabel}
                 </SelectValue>
               </SelectTrigger>
@@ -1560,6 +1546,20 @@ export function ImageStudio({ initialLocale = DEFAULT_LOCALE }: { initialLocale?
                 </SelectGroup>
               </SelectContent>
             </Select>
+            <a
+              aria-label="GitHub"
+              className={cn(
+                buttonVariants({ size: "lg", variant: "outline" }),
+                "h-10 rounded-md bg-muted/40 px-3 shadow-sm"
+              )}
+              href={GITHUB_REPOSITORY_URL}
+              rel="noreferrer"
+              target="_blank"
+            >
+              <GitHubMarkIcon />
+              <span className="hidden sm:inline">GitHub</span>
+              <span className="sr-only sm:hidden">GitHub</span>
+            </a>
           </div>
         </div>
       </header>
@@ -1651,12 +1651,14 @@ export function ImageStudio({ initialLocale = DEFAULT_LOCALE }: { initialLocale?
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={(event) => {
-                    event.preventDefault()
-                    addUploads(event.dataTransfer.files)
-                  }}
-                  className="studio-accent-card group flex h-28 w-full cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed text-sm text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
+                  onDragEnter={handleReferenceDragEnter}
+                  onDragLeave={handleReferenceDragLeave}
+                  onDragOver={handleReferenceDragOver}
+                  onDrop={handleReferenceDrop}
+                  className={cn(
+                    "studio-accent-card group flex h-28 w-full cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed text-sm text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground",
+                    isReferenceDropActive && "border-foreground/40 bg-muted/50 text-foreground"
+                  )}
                 >
                   <span className="font-medium">{text.clickOrDropReferences}</span>
                   <span className="text-xs text-muted-foreground">{text.referenceDropHint}</span>
@@ -1878,32 +1880,6 @@ export function ImageStudio({ initialLocale = DEFAULT_LOCALE }: { initialLocale?
                       </SelectGroup>
                     </SelectContent>
                   </Select>
-                </Field>
-
-                <Field>
-                  <FieldLabel className="text-xs font-semibold text-muted-foreground">
-                    {text.requestMode}
-                  </FieldLabel>
-                  <ToggleGroup
-                    spacing={2}
-                    value={[requestMode]}
-                    variant="outline"
-                    onValueChange={(values) => {
-                      const next = values.at(-1)
-                      if (next === "direct" || next === "proxy") setRequestMode(next)
-                    }}
-                    className={cn("grid w-full grid-cols-2", optionGroupClassName)}
-                  >
-                    <ToggleGroupItem value="direct" className={optionItemClassName}>
-                      {text.modeDirect}
-                    </ToggleGroupItem>
-                    <ToggleGroupItem value="proxy" className={optionItemClassName}>
-                      {text.modeProxy}
-                    </ToggleGroupItem>
-                  </ToggleGroup>
-                  <FieldDescription className="text-xs">
-                    {requestMode === "direct" ? text.modeDirectDescription : text.modeProxyDescription}
-                  </FieldDescription>
                 </Field>
 
                 <Field>
@@ -2181,7 +2157,6 @@ export function ImageStudio({ initialLocale = DEFAULT_LOCALE }: { initialLocale?
             <div className="relative border-t bg-background/70 px-5 py-4 backdrop-blur">
               <div className="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
                 {[
-                  [text.summaryMode, result.requestMode === "direct" ? text.modeDirect : text.modeProxy],
                   [text.summaryModel, result.model],
                   [text.summarySize, result.size],
                   [text.summaryQuality, qualityLabelByValue[result.quality] || result.quality],

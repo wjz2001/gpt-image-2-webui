@@ -235,20 +235,13 @@
   }
 
   .studio-logo-mark {
-    width: 2.5rem;
-    height: 2.5rem;
-    overflow: hidden;
-    border: 1px solid var(--border);
-    border-radius: 0.875rem;
-    background: rgb(255 255 255 / 5%);
-    box-shadow:
-      0 12px 32px -24px rgb(0 0 0 / 90%),
-      inset 0 1px 0 rgb(255 255 255 / 8%);
+    width: clamp(7.75rem, 14vw, 10rem);
   }
 
   .studio-logo-image {
     width: 100%;
-    height: 100%;
+    height: auto;
+    display: block;
     object-fit: contain;
   }
 

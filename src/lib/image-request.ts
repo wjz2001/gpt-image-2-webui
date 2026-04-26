@@ -52,28 +52,6 @@ export function normalizeImageEndpoint(
   return url.toString()
 }
 
-export function compactImagePayload(payload: Record<string, string | number | undefined>) {
-  return Object.fromEntries(
-    Object.entries(payload).filter(([, value]) => value !== undefined && value !== "")
-  )
-}
-
-export async function readImageApiResponse(response: Response, locale: Locale = DEFAULT_LOCALE) {
-  const contentType = response.headers.get("content-type") || ""
-
-  if (contentType.includes("application/json")) {
-    return (await response.json()) as unknown
-  }
-
-  const text = await response.text()
-
-  return {
-    error: {
-      message: text || t(locale, "nonJsonResponse"),
-    },
-  }
-}
-
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
